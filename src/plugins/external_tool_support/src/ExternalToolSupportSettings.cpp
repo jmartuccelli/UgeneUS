@@ -75,6 +75,11 @@ void ExternalToolSupportSettings::loadExternalToolsFromAppConfig() {
         bool isChecked = settings->getValue(PREFIX_EXTERNAL_TOOL_IS_CHECKED + toolIndex, QVariant(false), true).toBool();
         QString version = settings->getValue(PREFIX_EXTERNAL_TOOL_VERSION + toolIndex, QVariant("unknown"), true).toString();
         StrStrMap additionalInfo = settings->getValue(PREFIX_EXTERNAL_TOOL_ADDITIONAL_INFO + toolIndex, QVariant::fromValue<StrStrMap>(StrStrMap()), true).value<StrStrMap>();
+        if (!isValid || !QFileInfo::exists(path)) {
+            isValid = false;
+            isChecked = false;
+        }
+
         ExternalTool* tool = AppContext::getExternalToolRegistry()->getById(id);
         if (tool != nullptr) {
             tool->setPath(path);

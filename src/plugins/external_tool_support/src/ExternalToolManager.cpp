@@ -149,7 +149,7 @@ QString ExternalToolManagerImpl::addToolToPendingListsAndReturnToolPath(External
     } else {
         pendingValidationToolSet << tool->getId();
     }
-    return toolPath;
+    return QFileInfo::exists(toolPath) ? toolPath : "";
 }
 
 void ExternalToolManagerImpl::sl_onToolValidationTaskFinished(Task* task) {

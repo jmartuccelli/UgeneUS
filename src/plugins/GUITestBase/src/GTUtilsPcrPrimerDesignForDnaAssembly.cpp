@@ -25,6 +25,7 @@
 #include <QTableWidget>
 
 #include "GTUtilsOptionPanelSequenceView.h"
+#include "GTUtilsOptionsPanel.h"
 #include "GTUtilsSequenceView.h"
 #include "GTUtilsTaskTreeView.h"
 #include "base_dialogs/GTFileDialog.h"
@@ -176,6 +177,7 @@ GTUtilsPcrPrimerDesign::BadBackboneFiller::BadBackboneFiller(GUITestOpStatus &os
 
 void GTUtilsPcrPrimerDesign::openTab(GUITestOpStatus &os) {
     GTUtilsOptionPanelSequenceView::openTab(os, GTUtilsOptionPanelSequenceView::PcrPrimerDesign);
+    GTUtilsOptionsPanel::resizeToMaximum(os);
 }
 
 void GTUtilsPcrPrimerDesign::setUserPrimer(GUITestOpStatus &os, const QString &primer,

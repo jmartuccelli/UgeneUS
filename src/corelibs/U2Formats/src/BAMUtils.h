@@ -82,11 +82,11 @@ public:
     /**
      * Calls fopen() correctly for files with Unicode
      * names and returns a FILE* structure for the the opened file.
-     * For 'mode' see fopen() function description.
+     * Opens the file in binary mode.
      * Caller is responsible to close the file.
      * If any error happens the method returns nullptr.
      */
-    static FILE* openFile(const QString& path, const QString& mode);
+    static FILE* openFileForReading(const QString& path);
 
     /** Loads BAM index from the file (bam_index_t*). Returns nullptr of error. */
     static void* loadIndex(const QString& path);

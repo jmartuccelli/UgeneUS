@@ -62,6 +62,49 @@ extern "C" {
 
 namespace U2 {
 
+namespace CreatingFileMode {
+enum class CommonMode {
+    Read = 0,
+    Write = 1,
+    Binary = 2
+};
+Q_DECLARE_FLAGS(CommonModes, CommonMode)
+
+// Only these modes are available.
+enum class SamMode {
+    r,
+    rb,
+    wh,  // Write header for sam.
+    wb  // Binary for bam.
+};
+
+static CommonModes toCommonModes(const SamMode& samMode) {
+    switch (samMode) {
+        case SamMode::r:
+            return {};
+        case SamMode::rb:
+            return {CommonMode::Binary};
+        case SamMode::wh:
+            return {CommonMode::Write};
+        case SamMode::wb:
+            return {CommonMode::Write, CommonMode::Binary};
+    }
+}
+
+static const char* createModeStr(const SamMode& mode) {
+    switch (mode) {
+        case SamMode::r:
+            return "r";
+        case SamMode::rb:
+            return "rb";
+        case SamMode::wh:
+            return "wh";
+        case SamMode::wb:
+            return "wb";
+    }
+}
+}  // namespace CreatingFileMode
+
 /** Converts QString to wchar_t*. Caller is responsible to deallocated the returned result memory. */
 static wchar_t* toWideCharsArray(const QString& text) {
     auto wideCharsText = new wchar_t[text.length() + 1];
@@ -70,14 +113,20 @@ static wchar_t* toWideCharsArray(const QString& text) {
     return wideCharsText;
 }
 
-FILE* BAMUtils::openFile(const QString& fileUrl, const QString& mode) {
+static FILE* openFile(const QString& fileUrl, const CreatingFileMode::CommonModes& modeFlags) {
+    bool forWriting = modeFlags.testFlag(CreatingFileMode::CommonMode::Write);
+    CHECK(forWriting || QFileInfo::exists(fileUrl), nullptr)
+
+    QString mode = forWriting ? 'w' : 'r';
+    // Always open file in binary mode on Windows, so any kind of sam, sam.gz, bam, bai files are processed the same
+    // way.
+    if (isOsWindows() || modeFlags.testFlag(CreatingFileMode::CommonMode::Binary)) {
+        mode += 'b';
+    }
+
 #ifdef Q_OS_WIN
     QScopedPointer<wchar_t> unicodeFileName(toWideCharsArray(GUrlUtils::getNativeAbsolutePath(fileUrl)));
-    QString modeWithBinaryFlag = mode;
-    if (!modeWithBinaryFlag.contains("b")) {
-        modeWithBinaryFlag += "b";  // Always open file in binary mode, so any kind of sam, sam.gz, bam, bai files are processed the same way.
-    }
-    QScopedPointer<wchar_t> unicodeMode(toWideCharsArray(modeWithBinaryFlag));
+    QScopedPointer<wchar_t> unicodeMode(toWideCharsArray(mode));
     return _wfopen(unicodeFileName.data(), unicodeMode.data());
 #else
     return fopen(fileUrl.toLocal8Bit(), mode.toLatin1());
@@ -91,14 +140,12 @@ static void closeFileIfOpen(FILE* file) {
     }
 }
 
-static samfile_t* samOpen(const QString& url, const char* samMode, const void* aux = nullptr) {
-    QString fileMode = samMode;
-    fileMode.replace("h", "");
-    FILE* file = BAMUtils::openFile(url, fileMode);
+static samfile_t* samOpen(const QString& url, const CreatingFileMode::SamMode& samMode, const void* aux = nullptr) {
+    FILE* file = openFile(url, CreatingFileMode::toCommonModes(samMode));
     if (file == nullptr) {
         return nullptr;
     }
-    samfile_t* samfile = samopen_with_fd("", fileno(file), samMode, aux);
+    samfile_t* samfile = samopen_with_fd("", fileno(file), CreatingFileMode::createModeStr(samMode), aux);
     if (samfile == nullptr) {
         closeFileIfOpen(file);
         return nullptr;
@@ -144,7 +191,7 @@ static samfile_t* openSamWithFai(const QString& samUrl, U2OpStatus& os) {
 
     QByteArray faiUrlData = faiUrl.toLocal8Bit();
     void* aux = (void*)faiUrlData.constData();
-    return samOpen(samUrl, "r", aux);
+    return samOpen(samUrl, CreatingFileMode::SamMode::r, aux);
 }
 
 static QString openFileError(const QString& file) {
@@ -197,11 +244,11 @@ static void convertByteArray(const QList<QByteArray>& byteArray, char** charArra
     }
 
 void BAMUtils::convertBamToSam(U2OpStatus& os, const QString& bamPath, const QString& samPath) {
-    samfile_t* in = samOpen(bamPath, "rb");
+    samfile_t* in = samOpen(bamPath, CreatingFileMode::SamMode::rb);
     samfile_t* out = nullptr;
     SAMTOOL_CHECK(in != nullptr, openFileError(bamPath), );
     SAMTOOL_CHECK(in->header != nullptr, headerError(bamPath), );
-    out = samOpen(samPath, "wh", in->header);
+    out = samOpen(samPath, CreatingFileMode::SamMode::wh, in->header);
     SAMTOOL_CHECK(out != nullptr, openFileError(samPath), );
 
     bam1_t* b = bam_init1();
@@ -223,7 +270,7 @@ void BAMUtils::convertSamToBam(U2OpStatus& os, const QString& samPath, const QSt
         SAMTOOL_CHECK(aux != nullptr, faiError(referencePath), );
     }
 
-    in = samOpen(samPath, "r", aux);
+    in = samOpen(samPath, CreatingFileMode::SamMode::r, aux);
     SAMTOOL_CHECK(in != nullptr, openFileError(samPath), );
     SAMTOOL_CHECK(in->header != nullptr, headerError(samPath), );
     if (in->header->n_targets == 0) {
@@ -235,7 +282,7 @@ void BAMUtils::convertSamToBam(U2OpStatus& os, const QString& samPath, const QSt
         SAMTOOL_CHECK(in->header != nullptr, headerError(samPath), );
     }
 
-    out = samOpen(bamPath, "wb", in->header);
+    out = samOpen(bamPath, CreatingFileMode::SamMode::wb, in->header);
     SAMTOOL_CHECK(out != nullptr, openFileError(bamPath), );
 
     bam1_t* b = bam_init1();
@@ -284,7 +331,7 @@ bool BAMUtils::isSortedBam(const QString& bamUrl, U2OpStatus& os) {
     QString error;
     bool result = false;
 
-    FILE* file = openFile(bamUrl, "rb");
+    FILE* file = openFile(bamUrl, CreatingFileMode::CommonMode::Binary);
     bamFile bamHandler = bam_dopen(fileno(file), "rb");
     if (bamHandler != nullptr) {
         header = bam_header_read(bamHandler);
@@ -347,12 +394,11 @@ static QString createNumericSuffix(int n) {
 
 static void bamSortBlocks(int n, int k, bam1_p* buf, const QString& prefix, const bam_header_t* h) {
     QString sortedFileName = n < 0 ? prefix + ".bam" : prefix + "." + createNumericSuffix(n) + ".bam";
-    const char* mode = n < 0 ? "w" : "w1";
     coreLog.trace(QString("bamSortBlocks, n: %1, k: %2, prefix: %3, sorted file: %4").arg(n).arg(k).arg(prefix).arg(sortedFileName));
     ks_mergesort(sort, k, buf, nullptr);
-    FILE* file = BAMUtils::openFile(sortedFileName, mode);
+    FILE* file = openFile(sortedFileName, CreatingFileMode::CommonMode::Write);
     int fd = file == nullptr ? 0 : fileno(file);
-    bamFile fp = fd == 0 ? nullptr : bam_dopen(fd, mode);
+    bamFile fp = fd == 0 ? nullptr : bam_dopen(fd, n < 0 ? "w" : "w1");
     if (fp == nullptr) {
         coreLog.error(BAMUtils::tr("[sort_blocks] fail to create file %1").arg(sortedFileName));
         return;
@@ -366,7 +412,7 @@ static void bamSortBlocks(int n, int k, bam1_p* buf, const QString& prefix, cons
 
 static void bamSortCore(U2OpStatus& os, const QString& bamFileToSort, const QString& prefix) {
     coreLog.trace("bamSortCore: " + bamFileToSort + ", result prefix: " + prefix);
-    FILE* file = BAMUtils::openFile(bamFileToSort, "rb");
+    FILE* file = openFile(bamFileToSort, CreatingFileMode::CommonMode::Binary);
     CHECK_EXT(file != nullptr, os.setError(BAMUtils::tr("Failed to open file: %1").arg(bamFileToSort)), );
     int fd = fileno(file);
     int n = 0;
@@ -448,7 +494,7 @@ static int bamMergeCore(const QString& outFileName, const QList<QString>& filesT
     auto iter = (bam_iter_t*)calloc(n, sizeof(bam_iter_t));
     // read the first
     for (int i = 0; i != n; ++i) {
-        FILE* file = BAMUtils::openFile(filesToMerge[i], "r");
+        FILE* file = openFile(filesToMerge[i], {});
         int fd = file == nullptr ? 0 : fileno(file);
         fp[i] = bam_dopen(fd, "r");
         if (fp[i] == nullptr) {
@@ -500,7 +546,7 @@ static int bamMergeCore(const QString& outFileName, const QList<QString>& filesT
             h->pos = HEAP_EMPTY;
         }
     }
-    FILE* outFile = BAMUtils::openFile(outFileName, "wb");
+    FILE* outFile = openFile(outFileName, {CreatingFileMode::CommonMode::Write, CreatingFileMode::CommonMode::Binary});
     bamFile fpout = outFile == nullptr ? nullptr : bam_dopen(fileno(outFile), "w");
     if (fpout == nullptr) {
         coreLog.error(BAMUtils::tr("Failed to create the output file: %1").arg(outFileName));
@@ -553,7 +599,7 @@ GUrl BAMUtils::mergeBam(const QStringList& bamUrls, const QString& mergedBamTarg
 
 void* BAMUtils::loadIndex(const QString& filePath) {
     // See bam_index_load_local.
-    QString mode = "rb";
+    CreatingFileMode::CommonModes mode = CreatingFileMode::CommonMode::Binary;
     FILE* fp = openFile(filePath + ".bai", mode);
     if (fp == nullptr && filePath.endsWith("bam")) {
         fp = openFile(filePath.chopped(4) + ".bai", mode);
@@ -611,7 +657,7 @@ bool BAMUtils::hasValidFastaIndex(const GUrl& fastaUrl) {
  * Exact copy of 'bam_index_build2' with a correct unicode file names support.
  */
 static int bamIndexBuild(const QString& bamFileName) {
-    FILE* bFile = BAMUtils::openFile(bamFileName, "rb");
+    FILE* bFile = openFile(bamFileName, CreatingFileMode::CommonMode::Binary);
     CHECK(bFile != nullptr, -1);
     bamFile fp = bam_dopen(fileno(bFile), "rb");
     if (fp == nullptr) {
@@ -626,7 +672,8 @@ static int bamIndexBuild(const QString& bamFileName) {
         fprintf(stderr, "[bam_index_build2] fail to index the BAM file.\n");
         return -1;
     }
-    FILE* fpidx = BAMUtils::openFile(bamFileName + ".bai", "wb");
+    FILE* fpidx = openFile(bamFileName + ".bai",
+                           {CreatingFileMode::CommonMode::Write, CreatingFileMode::CommonMode::Binary});
     if (fpidx == nullptr) {
         fprintf(stderr, "[bam_index_build2] fail to create the index file.\n");
         return -1;
@@ -785,11 +832,11 @@ void BAMUtils::writeObjects(const QList<GObject*>& objects, const QString& url, 
 
     CHECK_EXT(!url.isEmpty(), os.setError("Empty file url"), );
 
-    QByteArray openMode("w");
+    CreatingFileMode::SamMode openMode;
     if (formatId == BaseDocumentFormats::BAM) {
-        openMode += "b";  // BAM output
+        openMode = CreatingFileMode::SamMode::wb;  // BAM output
     } else if (formatId == BaseDocumentFormats::SAM) {
-        openMode += "h";  // SAM only: write header
+        openMode = CreatingFileMode::SamMode::wh;  // SAM only: write header
     } else {
         os.setError("Only BAM or SAM files could be written");
         return;
@@ -802,7 +849,7 @@ void BAMUtils::writeObjects(const QList<GObject*>& objects, const QString& url, 
         return;
     }
 
-    samfile_t* out = samOpen(url, openMode.constData(), header);
+    samfile_t* out = samOpen(url, openMode, header);
     bam_header_destroy(header);
     CHECK_EXT(out != nullptr, os.setError(QString("Can not open file for writing: %1").arg(url)), );
 
@@ -815,8 +862,8 @@ bool BAMUtils::isEqualByLength(const QString& fileUrl1, const QString& fileUrl2,
     samfile_t* in = nullptr;
     samfile_t* out = nullptr;
 
-    const char* readMode = isBAM ? "rb" : "r";
     {
+        CreatingFileMode::SamMode readMode = isBAM ? CreatingFileMode::SamMode::rb : CreatingFileMode::SamMode::r;
         void* aux = nullptr;
         in = samOpen(fileUrl1, readMode, aux);
         SAMTOOL_CHECK(in != nullptr, openFileError(fileUrl1), false);
@@ -923,6 +970,10 @@ void BAMUtils::createFai(const GUrl& faiUrl, const QStringList& references, U2Op
         QString line = reference + "\n";
         io->writeBlock(line.toLocal8Bit());
     }
+}
+
+FILE* BAMUtils::openFileForReading(const QString& path) {
+    return openFile(path, CreatingFileMode::CommonMode::Binary);
 }
 
 /////////////////////////////////////////////////

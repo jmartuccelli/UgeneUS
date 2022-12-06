@@ -117,7 +117,7 @@ static FILE* openFile(const QString& fileUrl, const CreatingFileMode::CommonMode
     bool forWriting = modeFlags.testFlag(CreatingFileMode::CommonMode::Write);
     CHECK(forWriting || QFileInfo::exists(fileUrl), nullptr)
 
-    QString mode = forWriting ? 'w' : 'r';
+    QString mode = forWriting ? "w" : "r";
     // Always open file in binary mode on Windows, so any kind of sam, sam.gz, bam, bai files are processed the same
     // way.
     if (isOsWindows() || modeFlags.testFlag(CreatingFileMode::CommonMode::Binary)) {

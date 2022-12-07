@@ -398,7 +398,7 @@ static void bamSortBlocks(int n, int k, bam1_p* buf, const QString& prefix, cons
     ks_mergesort(sort, k, buf, nullptr);
     FILE* file = openFile(sortedFileName, CreatingFileMode::CommonMode::Write);
     int fd = file == nullptr ? 0 : fileno(file);
-    bamFile fp = fd == 0 ? nullptr : bam_dopen(fd, n < 0 ? "w" : "w1");
+    bamFile fp = fd == 0 ? nullptr : bam_dopen(fd, "w");
     if (fp == nullptr) {
         coreLog.error(BAMUtils::tr("[sort_blocks] fail to create file %1").arg(sortedFileName));
         return;

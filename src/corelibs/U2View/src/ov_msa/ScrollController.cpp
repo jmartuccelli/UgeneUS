@@ -447,7 +447,9 @@ void ScrollController::updateHorizontalScrollBarPrivate() {
     SAFE_POINT(numVisibleBases <= alignmentLength, "Horizontal scrollbar appears unexpectedly: numVisibleBases is too small", );
 
     // hide scrollbar
-    hScrollBar->setVisible(hScrollBarVisible && numVisibleBases < alignmentLength);
+    if (hScrollBar->parent()) {
+        hScrollBar->setVisible(hScrollBarVisible && numVisibleBases < alignmentLength);
+    }
 }
 
 void ScrollController::updateVerticalScrollBarPrivate() {

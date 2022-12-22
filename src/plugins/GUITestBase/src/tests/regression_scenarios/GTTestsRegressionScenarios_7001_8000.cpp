@@ -357,6 +357,57 @@ GUI_TEST_CLASS_DEFINITION(test_7106) {
     CHECK_SET_ERR(sequenceList2 == sequenceList1, "Sequence order must not change");
 }
 
+GUI_TEST_CLASS_DEFINITION(test_7121) {
+    // updateHorizontalScrollBarPrivate coverage.
+    {
+    GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/COI.aln");
+    GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+
+        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMsaEditor::getActiveMsaEditorWindow(os));
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible");
+
+        GTUtilsMsaEditor::zoomIn(os);
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible1");
+
+        GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible2");
+
+        GTUtilsMsaEditor::setMultilineMode(os, true);
+        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible");
+    }
+    {
+        GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/HIV-1.aln");
+        GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+
+        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMsaEditor::getActiveMsaEditorWindow(os));
+        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible1");
+
+        GTUtilsMsaEditor::zoomIn(os);
+        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible2");
+
+        GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
+        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible3");
+
+        GTUtilsMsaEditor::setMultilineMode(os, false);
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible3");
+    }
+    {
+        GTFileDialog::openFile(os, dataDir + "samples/Sanger/alignment.ugenedb");
+        GTUtilsMcaEditor::checkMcaEditorWindowIsActive(os);
+
+        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMcaEditor::getActiveMcaEditorWindow(os));
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca");
+
+        GTUtilsMcaEditor::zoomIn(os);
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca1");
+
+        GTUtilsMcaEditor::redo(os);
+        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca2");
+    }
+
+    
+}
+
 GUI_TEST_CLASS_DEFINITION(test_7125) {
     // Open data/samples/CLUSTALW/ty3.aln.gz
     // Press the Build Tree button on the toolbar.

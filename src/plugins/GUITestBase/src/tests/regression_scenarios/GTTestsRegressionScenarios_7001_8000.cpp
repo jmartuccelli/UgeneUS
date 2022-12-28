@@ -3249,7 +3249,7 @@ GUI_TEST_CLASS_DEFINITION(test_7661) {
     // Duplicate _common_data/ugenedb/chrM.sorted.bam.ugenedb.
     QString origFilePath = testDir + "_common_data/ugenedb/chrM.sorted.bam.ugenedb";
     GTFile::copy(os, origFilePath, sandBoxDir + "/chrM.sorted.bam.ugenedb");
-    
+
     // Open duplicate.
     GTFileDialog::openFile(os, sandBoxDir, "chrM.sorted.bam.ugenedb");
     GTUtilsTaskTreeView::waitTaskFinished(os);
@@ -3265,7 +3265,7 @@ GUI_TEST_CLASS_DEFINITION(test_7661) {
     // Click the cross in the search field in the project view.
     // Filter clearing has the same result
     GTUtilsProjectTreeView::filterProject(os, "");
-     
+
     // Close the chrM tab.
     GTMenu::clickMainMenuItem(os, {"Actions", "Close active view"}, GTGlobals::UseKey);
 
@@ -3278,7 +3278,7 @@ GUI_TEST_CLASS_DEFINITION(test_7661) {
 
     // Rename the file back to "chrM.sorted.bam.ugenedb".
     f.rename(sandBoxDir + "/chrM.sorted.bam.ugenedb");
-    
+
     // Open it in UGENE again.
     GTFileDialog::openFile(os, sandBoxDir, "chrM.sorted.bam.ugenedb");
     GTUtilsTaskTreeView::waitTaskFinished(os);
@@ -3506,12 +3506,12 @@ GUI_TEST_CLASS_DEFINITION(test_7668) {
 GUI_TEST_CLASS_DEFINITION(test_7671) {
     // I made a small file which has the same error as file from the issue,
     // because the file from the issue was almoust 100 Mb size
-    
+
     // Open _common_data/scenarios/_regression/7671/NC_051342_region.gb
     GTFileDialog::openFile(os, testDir + "_common_data/scenarios/_regression/7671/NC_051342_region.gb");
     GTUtilsTaskTreeView::waitTaskFinished(os);
 
-    // Call the Primer3 dialog 
+    // Call the Primer3 dialog
     // In the Primer3 Designer dialog select PT - PCR tab
     // Check in main checkbox and set Exon range : 1424 - 1606
     // Click Pick primers button
@@ -3736,6 +3736,40 @@ GUI_TEST_CLASS_DEFINITION(test_7715) {
     GTUtilsLog::checkContainsMessage(os, ltConnect, false);
     GTUtilsLog::checkContainsMessage(os, ltSize, false);
     GTUtilsLog::checkContainsMessage(os, ltSizeNameList, false);
+}
+
+GUI_TEST_CLASS_DEFINITION(test_7740) {
+    GTFileDialog::openFile(os, dataDir + "samples/Newick/COI.nwk");
+    GTUtilsPhyTree::checkTreeViewerWindowIsActive(os);
+
+    // Select root node.
+    TvNodeItem* rootNode = GTUtilsPhyTree::getRootNode(os);
+    GTUtilsPhyTree::clickNode(os, rootNode);
+
+    // Swap Siblings button must be disabled.
+    QToolBar* toolbar = GTToolbar::getToolbar(os, MWTOOLBAR_ACTIVEMDI);
+    auto swapSiblingsButton = GTToolbar::getWidgetForActionObjectName(os, toolbar, "Swap Siblings");
+    CHECK_SET_ERR(!swapSiblingsButton->isEnabled(), "Swap siblings must be disabled");
+}
+
+GUI_TEST_CLASS_DEFINITION(test_7744) {
+    GTFileDialog::openFile(os, dataDir + "/samples/Genbank/sars.gb");
+    GTUtilsSequenceView::checkSequenceViewWindowIsActive(os);
+
+    // Select "GC Deviation (G-C)/(G+C)"  or "AT Deviation (A-T)/(A+T)" graph
+    GTUtilsDialog::waitForDialog(os, new PopupChooser(os, {"GC Deviation (G-C)/(G+C)"}));
+    GTWidget::click(os, GTWidget::findWidget(os, "GraphMenuAction"));
+    GTUtilsDialog::checkNoActiveWaiters(os);
+
+    GTUtilsDialog::waitForDialog(os, new PopupChooser(os, {"AT Deviation (A-T)/(A+T)"}));
+    GTWidget::click(os, GTWidget::findWidget(os, "GraphMenuAction"));
+    GTUtilsDialog::checkNoActiveWaiters(os);
+}
+
+GUI_TEST_CLASS_DEFINITION(test_7748) {
+    GTUtilsDialog::waitForDialog(os, new ImportBAMFileFiller(os, "", testDir + "_common_data/fasta/broken", "empty_name_multi.fa"));
+    GTFileDialog::openFile(os, dataDir + "samples/Assembly/chrM.sam");
+    GTUtilsAssemblyBrowser::checkAssemblyBrowserWindowIsActive(os);
 }
 
 }  // namespace GUITest_regression_scenarios

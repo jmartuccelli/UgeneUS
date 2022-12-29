@@ -358,54 +358,76 @@ GUI_TEST_CLASS_DEFINITION(test_7106) {
 }
 
 GUI_TEST_CLASS_DEFINITION(test_7121) {
-    // updateHorizontalScrollBarPrivate coverage.
-    {
-    GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/COI.aln");
-    GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+    // Covering the updateHorizontalScrollBarPrivate method with tests. Checking that the behavior before and after
+    // the changes is exactly the same. The horizontal scrolling should always be visible, except in wrap mode:
+    // if wrap mode is used, the scrolling should always be invisible.
+    auto isScrollVisible = [&os]() {
+        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll");
+        GTThread::waitForMainThread();
+        bool isScrollVisible {};
 
-        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMsaEditor::getActiveMsaEditorWindow(os));
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible");
+        class GetScrollVisibilityScenario : public CustomScenario {
+            QScrollBar* scroll;
+            bool& isVisible;
+
+        public:
+            GetScrollVisibilityScenario(QScrollBar* scroll, bool& isVisible)
+                : scroll(scroll), isVisible(isVisible) {
+            }
+            void run(GUITestOpStatus&) override {
+                isVisible = scroll->isVisible();
+            }
+        };
+        GTThread::runInMainThread(os, new GetScrollVisibilityScenario(horizontalScroll, isScrollVisible));
+        GTThread::waitForMainThread();
+        return isScrollVisible;
+    };
+    {
+        GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/COI.aln");
+        GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+
+        CHECK_SET_ERR(isScrollVisible(),
+                      "In non-wrap mode the scroll should always be visible (even if the sequences are very short)");
 
         GTUtilsMsaEditor::zoomIn(os);
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible1");
+        CHECK_SET_ERR(isScrollVisible(), "Zooming in/out should not change the visibility of the scroll");
 
         GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible2");
+        CHECK_SET_ERR(isScrollVisible(), "Changing the alignment should not change the visibility of the scroll");
 
         GTUtilsMsaEditor::setMultilineMode(os, true);
-        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible");
+        CHECK_SET_ERR(!isScrollVisible(), "The scroll should be invisible in multiline mode");
     }
     {
         GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/HIV-1.aln");
         GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
 
-        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMsaEditor::getActiveMsaEditorWindow(os));
-        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible1");
+        CHECK_SET_ERR(!isScrollVisible(), "The scroll should be invisible in multiline mode (1)");
 
         GTUtilsMsaEditor::zoomIn(os);
-        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible2");
+        CHECK_SET_ERR(!isScrollVisible(),
+                      "Zooming in/out should not change the visibility of the scroll (it should now be invisible)");
 
         GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
-        CHECK_SET_ERR(!horizontalScroll->isVisible(), "Must be non-visible3");
+        CHECK_SET_ERR(
+            !isScrollVisible(),
+            "Changing the alignment should not change the visibility of the scroll (it should now be invisible)");
 
         GTUtilsMsaEditor::setMultilineMode(os, false);
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible3");
+        CHECK_SET_ERR(isScrollVisible(), "The scroll should be visible in non-wrap mode");
     }
     {
         GTFileDialog::openFile(os, dataDir + "samples/Sanger/alignment.ugenedb");
         GTUtilsMcaEditor::checkMcaEditorWindowIsActive(os);
 
-        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll", GTUtilsMcaEditor::getActiveMcaEditorWindow(os));
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca");
+        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible");
 
         GTUtilsMcaEditor::zoomIn(os);
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca1");
+        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible (even after zooming)");
 
         GTUtilsMcaEditor::redo(os);
-        CHECK_SET_ERR(horizontalScroll->isVisible(), "Must be visible mca2");
+        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible (even after changing the object)");
     }
-
-    
 }
 
 GUI_TEST_CLASS_DEFINITION(test_7125) {

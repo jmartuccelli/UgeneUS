@@ -361,11 +361,12 @@ GUI_TEST_CLASS_DEFINITION(test_7121) {
     // Covering the updateHorizontalScrollBarPrivate method with tests. Checking that the behavior before and after
     // the changes is exactly the same. The horizontal scrolling should always be visible, except in wrap mode:
     // if wrap mode is used, the scrolling should always be invisible.
-    auto isScrollVisible = [&os]() {
-        auto horizontalScroll = GTWidget::findScrollBar(os, "horizontal_sequence_scroll");
-        GTThread::waitForMainThread();
-        bool isScrollVisible {};
+    auto isScrollVisible = [&os](QWidget* parent) -> bool {
+        QList<QScrollBar*> scrollBars = GTWidget::findChildren<QScrollBar>(
+            os, parent, [](QScrollBar* scroll) { return scroll->objectName() == "horizontal_sequence_scroll"; });
+        CHECK_SET_ERR_RESULT(!scrollBars.empty(), "Horizontal scroll bars not found", {});
 
+        bool isVisible {};
         class GetScrollVisibilityScenario : public CustomScenario {
             QScrollBar* scroll;
             bool& isVisible;
@@ -378,55 +379,64 @@ GUI_TEST_CLASS_DEFINITION(test_7121) {
                 isVisible = scroll->isVisible();
             }
         };
-        GTThread::runInMainThread(os, new GetScrollVisibilityScenario(horizontalScroll, isScrollVisible));
+
         GTThread::waitForMainThread();
-        return isScrollVisible;
+        GTThread::runInMainThread(os, new GetScrollVisibilityScenario(scrollBars.first(), isVisible));
+        GTThread::waitForMainThread();
+        return isVisible;
     };
     {
         GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/COI.aln");
+        GTUtilsTaskTreeView::waitTaskFinished(os);
         GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+        QWidget* parent = GTUtilsMsaEditor::getActiveMsaEditorWindow(os);
 
-        CHECK_SET_ERR(isScrollVisible(),
+        CHECK_SET_ERR(isScrollVisible(parent),
                       "In non-wrap mode the scroll should always be visible (even if the sequences are very short)");
 
         GTUtilsMsaEditor::zoomIn(os);
-        CHECK_SET_ERR(isScrollVisible(), "Zooming in/out should not change the visibility of the scroll");
+        CHECK_SET_ERR(isScrollVisible(parent), "Zooming in/out should not change the visibility of the scroll");
 
         GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
-        CHECK_SET_ERR(isScrollVisible(), "Changing the alignment should not change the visibility of the scroll");
+        CHECK_SET_ERR(isScrollVisible(parent), "Changing the alignment should not change the visibility of the scroll");
 
         GTUtilsMsaEditor::setMultilineMode(os, true);
-        CHECK_SET_ERR(!isScrollVisible(), "The scroll should be invisible in multiline mode");
+        CHECK_SET_ERR(!isScrollVisible(parent), "The scroll should be invisible in multiline mode");
     }
     {
         GTFileDialog::openFile(os, dataDir + "samples/CLUSTALW/HIV-1.aln");
+        GTUtilsTaskTreeView::waitTaskFinished(os);
         GTUtilsMsaEditor::checkMsaEditorWindowIsActive(os);
+        QWidget* parent = GTUtilsMsaEditor::getActiveMsaEditorWindow(os);
 
-        CHECK_SET_ERR(!isScrollVisible(), "The scroll should be invisible in multiline mode (1)");
+        CHECK_SET_ERR(!isScrollVisible(parent), "The scroll should be invisible in multiline mode (1)");
 
         GTUtilsMsaEditor::zoomIn(os);
-        CHECK_SET_ERR(!isScrollVisible(),
+        CHECK_SET_ERR(!isScrollVisible(parent),
                       "Zooming in/out should not change the visibility of the scroll (it should now be invisible)");
 
         GTMenu::clickMainMenuItem(os, {"Actions", "Edit", "Remove all gaps"});
         CHECK_SET_ERR(
-            !isScrollVisible(),
+            !isScrollVisible(parent),
             "Changing the alignment should not change the visibility of the scroll (it should now be invisible)");
 
         GTUtilsMsaEditor::setMultilineMode(os, false);
-        CHECK_SET_ERR(isScrollVisible(), "The scroll should be visible in non-wrap mode");
+        CHECK_SET_ERR(isScrollVisible(parent), "The scroll should be visible in non-wrap mode");
     }
     {
         GTFileDialog::openFile(os, dataDir + "samples/Sanger/alignment.ugenedb");
+        GTUtilsTaskTreeView::waitTaskFinished(os);
         GTUtilsMcaEditor::checkMcaEditorWindowIsActive(os);
+        QWidget* parent = GTUtilsMcaEditor::getActiveMcaEditorWindow(os);
 
-        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible");
+        CHECK_SET_ERR(isScrollVisible(parent), "In MCA the scroll must always be visible");
 
         GTUtilsMcaEditor::zoomIn(os);
-        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible (even after zooming)");
+        CHECK_SET_ERR(isScrollVisible(parent), "In MCA the scroll must always be visible (even after zooming)");
 
         GTUtilsMcaEditor::redo(os);
-        CHECK_SET_ERR(isScrollVisible(), "In MCA the scroll must always be visible (even after changing the object)");
+        CHECK_SET_ERR(isScrollVisible(parent),
+                      "In MCA the scroll must always be visible (even after changing the object)");
     }
 }
 
